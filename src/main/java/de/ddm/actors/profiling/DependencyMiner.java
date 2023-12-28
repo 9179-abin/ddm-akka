@@ -9,6 +9,8 @@ import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
 import akka.actor.typed.receptionist.ServiceKey;
+import de.ddm.actors.Guardian;
+import de.ddm.actors.Master;
 import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.InputConfigurationSingleton;
@@ -233,19 +235,19 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		if (workerQueue.isEmpty()) {
 			workQueue.add(message);
 		} else {
-			largeMessageProxy.tell(new LargeMessageProxy.SendMessage(message, workerQueue.remove()));
+			this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(message, workerQueue.remove()));
 		}
 	}
 
 	private void giveWorkFromQueue(ActorRef<LargeMessageProxy.Message> largeMessageProxy) {
-		if (workQueue.isEmpty() && files.size() == inputFiles.length && workerQueue.size() == this.dependencyWorkers.size() - 1) {
+		if (workQueue.isEmpty() && files.size() == inputFiles.length && workerQueue.size() == this.dependencyWorkers.size() - 1) { // last returns so is not in queue
 			end();
 			System.exit(0);
 		}
-		if (workQueue.isEmpty()) {
-			workerQueue.add(largeMessageProxy);
+		if (this.workQueue.isEmpty()) {
+			this.workerQueue.add(largeMessageProxy);
 		} else {
-			largeMessageProxy.tell(new LargeMessageProxy.SendMessage(workQueue.remove(), largeMessageProxy));
+			this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(this.workQueue.remove(), largeMessageProxy));
 		}
 	}
 
