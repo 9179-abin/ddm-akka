@@ -46,9 +46,10 @@ public class Worker extends AbstractBehavior<Worker.Message> {
 
 		final int numWorkers = SystemConfigurationSingleton.get().getNumWorkers();
 
+		this.localDataStore = context.spawn(DataStore.create(), DataStore.DEFAULT_NAME);
 		this.workers = new ArrayList<>(numWorkers);
 		for (int id = 0; id < numWorkers; id++)
-			this.workers.add(context.spawn(DependencyWorker.create(), DependencyWorker.DEFAULT_NAME + "_" + id, DispatcherSelector.fromConfig("akka.worker-pool-dispatcher")));
+			this.workers.add(context.spawn(DependencyWorker.create(localDataStore), DependencyWorker.DEFAULT_NAME + "_" + id, DispatcherSelector.fromConfig("akka.worker-pool-dispatcher")));
 	}
 
 	/////////////////
@@ -56,6 +57,8 @@ public class Worker extends AbstractBehavior<Worker.Message> {
 	/////////////////
 
 	final List<ActorRef<DependencyWorker.Message>> workers;
+
+	final ActorRef<DataStore.Message> localDataStore;
 
 	////////////////////
 	// Actor Behavior //

@@ -9,8 +9,7 @@ import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
 import akka.actor.typed.receptionist.ServiceKey;
-import de.ddm.actors.Guardian;
-import de.ddm.actors.Master;
+import de.ddm.actors.DataStore;
 import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.InputConfigurationSingleton;
@@ -44,8 +43,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	@AllArgsConstructor
 	public static class HeaderMessage implements Message {
 		private static final long serialVersionUID = -5322425954432915838L;
-		int id;
-		String[] header;
+		private int id;
+		private String[] header;
 	}
 
 	@Getter
@@ -53,8 +52,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	@AllArgsConstructor
 	public static class FileMessage implements Message {
 		private static final long serialVersionUID = 4591192372652568030L;
-		int id;
-		List<Set<String>> fileContent;
+		private int id;
+		private List<Set<String>> fileContent;
 	}
 
 	@Getter
@@ -62,8 +61,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	@AllArgsConstructor
 	public static class RegistrationMessage implements Message {
 		private static final long serialVersionUID = -4025238529984914107L;
-		ActorRef<DependencyWorker.Message> dependencyWorker;
-		ActorRef<LargeMessageProxy.Message> largeMessageProxy;
+		private ActorRef<DependencyWorker.Message> dependencyWorker;
+		private ActorRef<LargeMessageProxy.Message> largeMessageProxy;
 	}
 
 	@Getter
@@ -71,9 +70,17 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	@AllArgsConstructor
 	public static class DependencyMessage implements Message {
 		private static final long serialVersionUID = 7696173597050572194L;
-		ActorRef<LargeMessageProxy.Message> dependencyWorkerLargeMessageProxy;
-		ColumnIndex left, right;
-		Dependency dependency;
+		private ActorRef<LargeMessageProxy.Message> dependencyWorkerLargeMessageProxy;
+		private ColumnIndex left, right;
+		private Dependency dependency;
+	}
+
+	@Getter
+	@NoArgsConstructor
+	@AllArgsConstructor
+	public static class ReceptionistListingMessage implements Message {
+		private static final long serialVersionUID = -6043905415647393701L;
+		private Receptionist.Listing listing;
 	}
 
 	////////////////////////
@@ -102,6 +109,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 		this.dependencyWorkers = new ArrayList<>();
 		context.getSystem().receptionist().tell(Receptionist.register(dependencyMinerService, context.getSelf()));
+		final ActorRef<Receptionist.Listing> listingResponseAdapter = context.messageAdapter(Receptionist.Listing.class, ReceptionistListingMessage::new);
+		context.getSystem().receptionist().tell(Receptionist.subscribe(DataStore.dataStoreService, listingResponseAdapter));
 	}
 
 	/////////////////
@@ -114,11 +123,11 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private final File[] inputFiles;
 	private final String[][] headerLines;
 	private final Map<Integer, List<Set<String>>> files = new HashMap<>();
-	private final Map<ColumnIndex, Map<ColumnIndex, Boolean>> dependencies = new HashMap<>();
 
 	private final List<ActorRef<InputReader.Message>> inputReaders;
 	private final ActorRef<ResultCollector.Message> resultCollector;
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
+	private ActorRef<DataStore.Message> masterStore;
 
 	private final List<ActorRef<DependencyWorker.Message>> dependencyWorkers;
 
@@ -134,6 +143,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	@Override
 	public Receive<Message> createReceive() {
 		return newReceiveBuilder()
+				.onMessage(ReceptionistListingMessage.class, this::handle)
 				.onMessage(StartMessage.class, this::handle)
 				.onMessage(FileMessage.class, this::handle)
 				.onMessage(HeaderMessage.class, this::handle)
@@ -141,6 +151,16 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				.onMessage(DependencyMessage.class, this::handle)
 				.onSignal(Terminated.class, this::handle)
 				.build();
+	}
+
+	private Behavior<Message> handle(ReceptionistListingMessage message) {
+		if (masterStore == null && message.getListing().isForKey(DataStore.dataStoreService)) {
+			Set<ActorRef<DataStore.Message>> dataStores = message.getListing().getServiceInstances(DataStore.dataStoreService);
+			if (!dataStores.isEmpty()) {
+				masterStore = dataStores.iterator().next();
+			}
+		}
+		return this;
 	}
 
 	private Behavior<Message> handle(StartMessage message) {
@@ -159,20 +179,27 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private Behavior<Message> handle(FileMessage message) {
 		// Ignoring batch content for now ... but I could do so much with it.
+		if (masterStore == null) {
+			getContext().getSelf().tell(message);
+			return this;
+		}
+		for (int i = 0; i < message.getFileContent().size(); i++) {
+			masterStore.tell(new DataStore.PutDataMessage(new ColumnIndex(message.getId(), i), message.getFileContent().get(i)));
+		}
 
 		for (int h = 0; h < message.getFileContent().size(); h++) {
 			for (Map.Entry<Integer, List<Set<String>>> columns: files.entrySet()) {
 				for (int j = 0; j < columns.getValue().size(); j++) {
-					addToWorkQueue(new DependencyWorker.DependencyMessage(this.largeMessageProxy,
-							message.getFileContent().get(h), columns.getValue().get(j), new ColumnIndex(message.getId(), h),
+					addToWorkQueue(new DependencyWorker.DependencyMessage(getContext().getSelf(),
+							null, null, new ColumnIndex(message.getId(), h),
 							new ColumnIndex(columns.getKey(), j)));
 				}
 			}
 		}
 		for (int i = 0; i < message.getFileContent().size(); i++) {
 			for (int j = 0; j < i; j++) {
-				addToWorkQueue(new DependencyWorker.DependencyMessage(this.largeMessageProxy,
-						message.getFileContent().get(i), message.getFileContent().get(j),
+				addToWorkQueue(new DependencyWorker.DependencyMessage(getContext().getSelf(),
+						null, null,
 						new ColumnIndex(message.getId(), i), new ColumnIndex(message.getId(), j)));
 			}
 		}
@@ -183,21 +210,15 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private Behavior<Message> handle(DependencyMessage message) {
 		switch (message.getDependency()) {
-			case NONE:
-				putDependency(message.getLeft(), message.getRight(), false);
-				putDependency(message.getRight(), message.getLeft(), false);
-				break;
 			case RIGHT:
-				putDependency(message.getLeft(), message.getRight(), false);
-				putDependency(message.getRight(), message.getLeft(), true);
+				putDependency(message.getRight(), message.getLeft());
 				break;
 			case LEFT:
-				putDependency(message.getLeft(), message.getRight(), true);
-				putDependency(message.getRight(), message.getLeft(), false);
+				putDependency(message.getLeft(), message.getRight());
 				break;
 			case BOTH:
-				putDependency(message.getLeft(), message.getRight(), true);
-				putDependency(message.getRight(), message.getLeft(), true);
+				putDependency(message.getLeft(), message.getRight());
+				putDependency(message.getRight(), message.getLeft());
 				break;
 		}
 		giveWorkFromQueue(message.getDependencyWorkerLargeMessageProxy());
@@ -217,14 +238,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		return this;
 	}
 
-	private void putDependency(ColumnIndex left, ColumnIndex right, boolean dependency) {
-		dependencies.compute(left, (k, v) -> {
-			if (v == null)
-				return new HashMap<>(Map.of(right, dependency));
-			v.put(right, dependency);
-			return v;
-		});
-		if (!dependency) return;
+	private void putDependency(ColumnIndex left, ColumnIndex right) {
 		InclusionDependency ind = new InclusionDependency(inputFiles[left.getFileId()],
 				new String[] {headerLines[left.getFileId()][left.getColumnIndex()]},
 				inputFiles[right.getFileId()], new String[] {headerLines[right.getFileId()][right.getColumnIndex()]});
@@ -242,7 +256,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private void giveWorkFromQueue(ActorRef<LargeMessageProxy.Message> largeMessageProxy) {
 		if (workQueue.isEmpty() && files.size() == inputFiles.length && workerQueue.size() == this.dependencyWorkers.size() - 1) { // last returns so is not in queue
 			end();
-			System.exit(0);
+			System.exit(0); // apparently someone set some reasonable shutdown hook, probably akka
 		}
 		if (this.workQueue.isEmpty()) {
 			this.workerQueue.add(largeMessageProxy);

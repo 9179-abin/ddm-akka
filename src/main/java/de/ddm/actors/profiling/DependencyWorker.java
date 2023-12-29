@@ -7,6 +7,7 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
+import de.ddm.actors.DataStore;
 import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.structures.ColumnIndex;
@@ -34,17 +35,17 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	@AllArgsConstructor
 	public static class DependencyMessage implements LargeMessage {
 		private static final long serialVersionUID = -5120321521679530290L;
-		ActorRef<LargeMessageProxy.Message> dependencyMinerLargeMessageProxy;
-		Set<String> column1, column2;
-		ColumnIndex left, right;
+		private ActorRef<DependencyMiner.Message> dependencyMiner;
+		private Set<String> column1, column2;
+		private ColumnIndex left, right;
 	}
 
 	@Getter
 	@NoArgsConstructor
 	@AllArgsConstructor
 	public static class ReceptionistListingMessage implements Message {
-		private static final long serialVersionUID = -5246338806092216222L;
-		Receptionist.Listing listing;
+		private static final long serialVersionUID = -3239136855758589337L;
+		private Receptionist.Listing listing;
 	}
 
 	////////////////////////
@@ -53,13 +54,13 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 
 	public static final String DEFAULT_NAME = "dependencyWorker";
 
-	public static Behavior<Message> create() {
-		return Behaviors.setup(DependencyWorker::new);
+	public static Behavior<Message> create(ActorRef<DataStore.Message> localDataStore) {
+		return Behaviors.setup(context -> new DependencyWorker(context, localDataStore));
 	}
 
-	private DependencyWorker(ActorContext<Message> context) {
+	private DependencyWorker(ActorContext<Message> context, ActorRef<DataStore.Message> localDataStore) {
 		super(context);
-
+		this.localDataStore = localDataStore;
 		final ActorRef<Receptionist.Listing> listingResponseAdapter = context.messageAdapter(Receptionist.Listing.class, ReceptionistListingMessage::new);
 		context.getSystem().receptionist().tell(Receptionist.subscribe(DependencyMiner.dependencyMinerService, listingResponseAdapter));
 
@@ -71,6 +72,8 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	/////////////////
 
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
+
+	private final ActorRef<DataStore.Message> localDataStore;
 
 	////////////////////
 	// Actor Behavior //
@@ -92,6 +95,10 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	}
 
 	private Behavior<Message> handle(DependencyMessage message) {
+		if (message.getColumn1() == null || message.getColumn2() == null) {
+			localDataStore.tell(new DataStore.GetDataMessage(message.getLeft(), message.getRight(), getContext().getSelf()));
+			return this;
+		}
 		Dependency result = message.column1.size() < message.column2.size() ?
 				message.column2.containsAll(message.column1) ?
 						Dependency.LEFT
@@ -101,9 +108,8 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 						Dependency.BOTH
 						: Dependency.RIGHT
 				: Dependency.NONE;
-		LargeMessageProxy.LargeMessage dependencyMessage = new DependencyMiner.DependencyMessage(this.largeMessageProxy,
-				message.getLeft(), message.getRight(), result);
-		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(dependencyMessage, message.getDependencyMinerLargeMessageProxy()));
+		message.getDependencyMiner().tell(new DependencyMiner.DependencyMessage(this.largeMessageProxy,
+				message.getLeft(), message.getRight(), result));
 		return this;
 	}
 }
