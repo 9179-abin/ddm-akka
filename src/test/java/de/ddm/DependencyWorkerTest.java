@@ -4,7 +4,6 @@ import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
 import de.ddm.actors.DataStore;
-import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.actors.profiling.DependencyMiner;
 import de.ddm.actors.profiling.DependencyWorker;
 import de.ddm.singletons.SystemConfigurationSingleton;
@@ -13,16 +12,13 @@ import de.ddm.structures.Dependency;
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.Assert.*;
 
-import java.util.HashSet;
 import java.util.Set;
 
 public class DependencyWorkerTest {
 
     @ClassRule
     public static final TestKitJunitResource testKit = new TestKitJunitResource(SystemConfigurationSingleton.get().toAkkaTestConfig());
-
 
 
     @Test

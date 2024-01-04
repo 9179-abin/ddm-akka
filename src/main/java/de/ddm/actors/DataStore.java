@@ -166,6 +166,10 @@ public class DataStore extends AbstractBehavior<DataStore.Message> {
                     message.getIndex1(), message.getIndex2()));
             return this;
         }
+        if (masterStore == null) {
+            getContext().getSelf().tell(message);
+            return this;
+        }
         if (column1 == null) {
             requestData(message, message.getIndex1());
         }
@@ -180,10 +184,6 @@ public class DataStore extends AbstractBehavior<DataStore.Message> {
     }
 
     private void requestData(GetDataMessage message, ColumnIndex index) {
-        if (masterStore == null) {
-            getContext().getSelf().tell(message);
-            return;
-        }
         this.requests.compute(index, (k, v) -> {
             Queue<GetDataMessage> queue = v;
             if (queue == null) {
