@@ -124,6 +124,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	/////////////////
 
 	private long startTime;
+	private boolean done;
 
 	private final boolean discoverNaryDependencies;
 	private final File[] inputFiles;
@@ -215,6 +216,10 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private Behavior<Message> handle(DependencyMessage message) {
+		if (!unanswered.contains(List.of(message.getLeft(), message.getRight()))) {
+			giveWorkFromQueue(message.getDependencyWorker());
+			return this;
+		}
 		switch (message.getDependency()) {
 			case RIGHT:
 				putDependency(message.getRight(), message.getLeft());
@@ -246,7 +251,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private Behavior<Message> handle(ShutdownMessage message) {
-		this.resultCollector.tell(new ResultCollector.AbortMessage());
+		if (!done)
+			this.resultCollector.tell(new ResultCollector.AbortMessage());
 		return Behaviors.stopped();
 	}
 
@@ -285,6 +291,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private void end() {
+		this.done = true;
 		this.resultCollector.tell(new ResultCollector.FinalizeMessage());
 		long discoveryTime = System.currentTimeMillis() - this.startTime;
 		this.getContext().getLog().info("Finished mining within {} ms!", discoveryTime);
