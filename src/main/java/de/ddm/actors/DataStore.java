@@ -66,6 +66,12 @@ public class DataStore extends AbstractBehavior<DataStore.Message> {
         private Receptionist.Listing listing;
     }
 
+    @Getter
+    @AllArgsConstructor
+    public static class ShutdownMessage implements Message {
+        private static final long serialVersionUID = 5465251501735075468L;
+    }
+
     public static final String DEFAULT_NAME = "dataStore";
 
     public static final ServiceKey<DataStore.Message> dataStoreService = ServiceKey.create(DataStore.Message.class, DEFAULT_NAME + "Service");
@@ -77,6 +83,7 @@ public class DataStore extends AbstractBehavior<DataStore.Message> {
                 .onMessage(GetDataMessage.class, this::handle)
                 .onMessage(RemoteGetDataMessage.class, this::handle)
                 .onMessage(PutDataMessage.class, this::handle)
+                .onMessage(ShutdownMessage.class, this::handle)
                 .build();
     }
 
@@ -166,6 +173,10 @@ public class DataStore extends AbstractBehavior<DataStore.Message> {
             requestData(message, message.getIndex2());
         }
         return this;
+    }
+
+    private Behavior<Message> handle(ShutdownMessage message) {
+        return Behaviors.stopped();
     }
 
     private void requestData(GetDataMessage message, ColumnIndex index) {

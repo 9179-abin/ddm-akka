@@ -42,6 +42,12 @@ public class ResultCollector extends AbstractBehavior<ResultCollector.Message> {
 		private static final long serialVersionUID = -6603856949941810321L;
 	}
 
+	@NoArgsConstructor
+	public static class AbortMessage implements Message {
+		private static final long serialVersionUID = -1306559127382419415L;
+	}
+
+
 	////////////////////////
 	// Actor Construction //
 	////////////////////////
@@ -79,6 +85,7 @@ public class ResultCollector extends AbstractBehavior<ResultCollector.Message> {
 		return newReceiveBuilder()
 				.onMessage(ResultMessage.class, this::handle)
 				.onMessage(FinalizeMessage.class, this::handle)
+				.onMessage(AbortMessage.class, this::handle)
 				.onSignal(PostStop.class, this::handle)
 				.build();
 	}
@@ -100,6 +107,14 @@ public class ResultCollector extends AbstractBehavior<ResultCollector.Message> {
 		this.writer.flush();
 		this.getContext().getSystem().unsafeUpcast().tell(new Guardian.ShutdownMessage());
 		return this;
+	}
+
+	private Behavior<Message> handle(AbortMessage message) throws IOException {
+		this.writer.write("Aborted, may be incomplete");
+		this.writer.newLine();
+		this.writer.flush();
+		this.getContext().getSystem().unsafeUpcast().tell(new Guardian.ShutdownMessage());
+		return Behaviors.stopped();
 	}
 
 	private Behavior<Message> handle(PostStop signal) throws IOException {

@@ -8,7 +8,6 @@ import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
 import de.ddm.actors.DataStore;
-import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.structures.ColumnIndex;
 import de.ddm.structures.Dependency;
@@ -17,6 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message> {
 
@@ -43,6 +43,12 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	public static class ReceptionistListingMessage implements Message {
 		private static final long serialVersionUID = -3239136855758589337L;
 		private Receptionist.Listing listing;
+	}
+
+	@Getter
+	@AllArgsConstructor
+	public static class ShutdownMessage implements Message {
+		private static final long serialVersionUID = -3785894828471650658L;
 	}
 
 	////////////////////////
@@ -77,6 +83,7 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		return newReceiveBuilder()
 				.onMessage(ReceptionistListingMessage.class, this::handle)
 				.onMessage(DependencyMessage.class, this::handle)
+				.onMessage(ShutdownMessage.class, this::handle)
 				.build();
 	}
 
@@ -104,5 +111,9 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		message.getDependencyMiner().tell(new DependencyMiner.DependencyMessage(this.getContext().getSelf(),
 				message.getLeft(), message.getRight(), result));
 		return this;
+	}
+
+	private Behavior<Message> handle(ShutdownMessage message) {
+		return Behaviors.stopped();
 	}
 }

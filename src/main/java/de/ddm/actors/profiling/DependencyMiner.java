@@ -10,6 +10,7 @@ import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
 import akka.actor.typed.receptionist.ServiceKey;
 import de.ddm.actors.DataStore;
+import de.ddm.actors.Guardian;
 import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.InputConfigurationSingleton;
@@ -82,6 +83,12 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		private Receptionist.Listing listing;
 	}
 
+	@Getter
+	@AllArgsConstructor
+	public static class ShutdownMessage implements Message {
+		private static final long serialVersionUID = 4703556917331631772L;
+	}
+
 	////////////////////////
 	// Actor Construction //
 	////////////////////////
@@ -132,7 +139,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private final Queue<ActorRef<DependencyWorker.Message>> workerQueue = new ArrayDeque<>();
 	private final Queue<DependencyWorker.Message> workQueue = new ArrayDeque<>();
-
+	private final Queue<List<ColumnIndex>> unanswered = new ArrayDeque<>();
 
 	////////////////////
 	// Actor Behavior //
@@ -147,6 +154,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				.onMessage(HeaderMessage.class, this::handle)
 				.onMessage(RegistrationMessage.class, this::handle)
 				.onMessage(DependencyMessage.class, this::handle)
+				.onMessage(ShutdownMessage.class, this::handle)
 				.onSignal(Terminated.class, this::handle)
 				.build();
 	}
@@ -219,6 +227,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				putDependency(message.getRight(), message.getLeft());
 				break;
 		}
+		this.unanswered.remove(List.of(message.getLeft(), message.getRight()));
 		giveWorkFromQueue(message.getDependencyWorker());
 		return this;
 	}
@@ -234,6 +243,11 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			this.giveWorkFromQueue(message.getDependencyWorker());
 		}
 		return this;
+	}
+
+	private Behavior<Message> handle(ShutdownMessage message) {
+		this.resultCollector.tell(new ResultCollector.AbortMessage());
+		return Behaviors.stopped();
 	}
 
 	private void putDependency(ColumnIndex left, ColumnIndex right) {
@@ -252,14 +266,21 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private void giveWorkFromQueue(ActorRef<DependencyWorker.Message> dependencyWorker) {
-		if (workQueue.isEmpty() && files.size() == inputFiles.length && workerQueue.size() == this.dependencyWorkers.size() - 1) { // last returns so is not in queue
+		if (workQueue.isEmpty() && files.size() == inputFiles.length && workerQueue.size() == this.dependencyWorkers.size() - 1 && unanswered.isEmpty()) { // last returns so is not in queue
 			end();
-			System.exit(0); // apparently someone set some reasonable shutdown hook, probably akka
 		}
-		if (this.workQueue.isEmpty()) {
+		if (!this.workQueue.isEmpty()) {
+			DependencyWorker.DependencyMessage message = (DependencyWorker.DependencyMessage) this.workQueue.remove();
+			this.unanswered.add(List.of(message.getLeft(), message.getRight()));
+			dependencyWorker.tell(message);
+
+		} else if (unanswered.isEmpty()){
 			this.workerQueue.add(dependencyWorker);
 		} else {
-			dependencyWorker.tell(this.workQueue.remove());
+			List<ColumnIndex> unansweredMessage = unanswered.remove();
+			unanswered.add(unansweredMessage);
+			dependencyWorker.tell(new DependencyWorker.DependencyMessage(getContext().getSelf(),
+					null, null, unansweredMessage.get(0), unansweredMessage.get(1)));
 		}
 	}
 
