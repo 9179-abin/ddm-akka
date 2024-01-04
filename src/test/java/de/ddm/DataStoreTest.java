@@ -4,20 +4,16 @@ import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.receptionist.Receptionist;
-import akka.actor.typed.receptionist.ServiceKey;
 import de.ddm.actors.DataStore;
 import de.ddm.actors.profiling.DependencyMiner;
 import de.ddm.actors.profiling.DependencyWorker;
-import de.ddm.actors.profiling.Pruner;
 import de.ddm.configuration.SystemConfiguration;
 import de.ddm.singletons.SystemConfigurationSingleton;
 import de.ddm.structures.ColumnIndex;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import java.time.Duration;
 import java.util.Set;
 
 public class DataStoreTest {
