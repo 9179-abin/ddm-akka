@@ -106,7 +106,7 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 		}
 
 		message.getReplyTo().tell(new DependencyMiner.FileMessage(this.id, fileContent));
-		return this;
+		return Behaviors.stopped();
 	}
 
 	private Behavior<Message> handle(PostStop signal) throws IOException {

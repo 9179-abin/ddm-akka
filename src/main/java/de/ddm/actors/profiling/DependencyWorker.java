@@ -27,13 +27,10 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	public interface Message extends AkkaSerializable {
 	}
 
-	public interface LargeMessage extends Message, LargeMessageProxy.LargeMessage {
-	}
-
 	@Getter
 	@NoArgsConstructor
 	@AllArgsConstructor
-	public static class DependencyMessage implements LargeMessage {
+	public static class DependencyMessage implements Message {
 		private static final long serialVersionUID = -5120321521679530290L;
 		private ActorRef<DependencyMiner.Message> dependencyMiner;
 		private Set<String> column1, column2;
@@ -63,15 +60,11 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		this.localDataStore = localDataStore;
 		final ActorRef<Receptionist.Listing> listingResponseAdapter = context.messageAdapter(Receptionist.Listing.class, ReceptionistListingMessage::new);
 		context.getSystem().receptionist().tell(Receptionist.subscribe(DependencyMiner.dependencyMinerService, listingResponseAdapter));
-
-		this.largeMessageProxy = this.getContext().spawn(LargeMessageProxy.create(this.getContext().getSelf().unsafeUpcast()), LargeMessageProxy.DEFAULT_NAME);
 	}
 
 	/////////////////
 	// Actor State //
 	/////////////////
-
-	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
 
 	private final ActorRef<DataStore.Message> localDataStore;
 
@@ -90,7 +83,7 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	private Behavior<Message> handle(ReceptionistListingMessage message) {
 		Set<ActorRef<DependencyMiner.Message>> dependencyMiners = message.getListing().getServiceInstances(DependencyMiner.dependencyMinerService);
 		for (ActorRef<DependencyMiner.Message> dependencyMiner : dependencyMiners)
-			dependencyMiner.tell(new DependencyMiner.RegistrationMessage(this.getContext().getSelf(), this.largeMessageProxy));
+			dependencyMiner.tell(new DependencyMiner.RegistrationMessage(this.getContext().getSelf()));
 		return this;
 	}
 
@@ -108,7 +101,7 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 						Dependency.BOTH
 						: Dependency.RIGHT
 				: Dependency.NONE;
-		message.getDependencyMiner().tell(new DependencyMiner.DependencyMessage(this.largeMessageProxy,
+		message.getDependencyMiner().tell(new DependencyMiner.DependencyMessage(this.getContext().getSelf(),
 				message.getLeft(), message.getRight(), result));
 		return this;
 	}
