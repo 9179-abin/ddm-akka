@@ -4,7 +4,7 @@ import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.receptionist.Receptionist;
-import de.ddm.actors.DataStore;
+import de.ddm.actors.profiling.DataStore;
 import de.ddm.actors.profiling.DependencyMiner;
 import de.ddm.actors.profiling.DependencyWorker;
 import de.ddm.configuration.SystemConfiguration;

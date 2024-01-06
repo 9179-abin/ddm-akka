@@ -7,7 +7,6 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
-import de.ddm.actors.DataStore;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.structures.ColumnIndex;
 import de.ddm.structures.Dependency;
@@ -16,7 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message> {
 

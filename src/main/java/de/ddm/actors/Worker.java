@@ -8,6 +8,7 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import de.ddm.actors.patterns.Reaper;
+import de.ddm.actors.profiling.DataStore;
 import de.ddm.actors.profiling.DependencyWorker;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.SystemConfigurationSingleton;

@@ -1,4 +1,4 @@
-package de.ddm.actors;
+package de.ddm.actors.profiling;
 
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
@@ -9,8 +9,6 @@ import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
 import akka.actor.typed.receptionist.ServiceKey;
 import de.ddm.actors.patterns.LargeMessageProxy;
-import de.ddm.actors.profiling.DependencyMiner;
-import de.ddm.actors.profiling.DependencyWorker;
 import de.ddm.configuration.SystemConfiguration;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.SystemConfigurationSingleton;

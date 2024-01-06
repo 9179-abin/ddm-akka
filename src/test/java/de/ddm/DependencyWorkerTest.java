@@ -3,7 +3,7 @@ package de.ddm;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
-import de.ddm.actors.DataStore;
+import de.ddm.actors.profiling.DataStore;
 import de.ddm.actors.profiling.DependencyMiner;
 import de.ddm.actors.profiling.DependencyWorker;
 import de.ddm.singletons.SystemConfigurationSingleton;
